@@ -16,7 +16,7 @@
 <resources>
     <string name="picture">Picture</string>
     <string name="description_info">Info</string>
-    <string name="request_permission">This app needs camera permission.</string>
+    <string name="request_permission">Esta aplicacion requiere el permiso de camara.</string>
     <string name="title_activity_settings">Configuracion</string>
 
     <!-- Preference Titles -->

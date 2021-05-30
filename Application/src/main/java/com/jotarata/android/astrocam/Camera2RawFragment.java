@@ -197,11 +197,19 @@ public class Camera2RawFragment extends Fragment
 
         @Override
         public void onSurfaceTextureAvailable(SurfaceTexture texture, int width, int height) {
+            if (mCharacteristics == null)
+            {
+                return;
+            }
             configureTransform(width, height);
         }
 
         @Override
         public void onSurfaceTextureSizeChanged(SurfaceTexture texture, int width, int height) {
+            if (mCharacteristics == null)
+            {
+                return;
+            }
             configureTransform(width, height);
         }
 
@@ -688,7 +696,6 @@ public class Camera2RawFragment extends Fragment
                 //Log.d("Sensor","Calm");
             }
         });
-
     }
 
     @Override
@@ -876,16 +883,20 @@ public class Camera2RawFragment extends Fragment
         Activity activity = getActivity();
         CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
         if (manager == null) {
-            ErrorDialog.buildErrorDialog("This device doesn't support Camera2 API.").
+            ErrorDialog.buildErrorDialog("Este dispositivo no soporta la API de Camera2.").
                     show(getFragmentManager(), "dialog");
             return false;
         }
         try {
+            Log.d("CAMERA ID", String.valueOf(manager.getCameraIdList().length));
             // Find a CameraDevice that supports RAW captures, and configure state.
             for (String cameraId : manager.getCameraIdList()) {
                 CameraCharacteristics characteristics
                         = manager.getCameraCharacteristics(cameraId);
-
+                if (characteristics.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_FRONT)
+                {
+                    continue; // We dont want front cameras
+                }
                 // We only use a camera that supports RAW in this sample.
                 if (!contains(characteristics.get(
                                 CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES),
@@ -901,7 +912,7 @@ public class Camera2RawFragment extends Fragment
                 largestRaw = Collections.max(
                         Arrays.asList(map.getOutputSizes(ImageFormat.RAW_SENSOR)),
                         new CompareSizesByArea());
-                Log.d(TAG, "Raw formats: " + Arrays.toString(map.getOutputSizes(ImageFormat.RAW_SENSOR)));
+                Log.d("OUTPUT SIZES", "Raw formats: " + Arrays.toString(map.getOutputSizes(ImageFormat.RAW_SENSOR)));
                 synchronized (mCameraStateLock) {
                     // Set up ImageReaders for JPEG and RAW outputs.  Place these in a reference
                     // counted wrapper to ensure they are only closed when all background tasks
@@ -925,7 +936,7 @@ public class Camera2RawFragment extends Fragment
         }
 
         // If we found no suitable cameras for capturing RAW, warn the user.
-        ErrorDialog.buildErrorDialog("This device doesn't support capturing RAW photos").
+        ErrorDialog.buildErrorDialog("Este dispositivo no soporta la captura en RAW").
                 show(getFragmentManager(), "dialog");
         return false;
     }
@@ -975,7 +986,7 @@ public class Camera2RawFragment extends Fragment
         if (shouldShowRationale()) {
             PermissionConfirmationDialog.newInstance().show(getChildFragmentManager(), "dialog");
         } else {
-            FragmentCompat.requestPermissions(this, CAMERA_PERMISSIONS, REQUEST_CAMERA_PERMISSIONS);
+            ActivityCompat.requestPermissions(this.getActivity(), CAMERA_PERMISSIONS, REQUEST_CAMERA_PERMISSIONS);
         }
     }
 

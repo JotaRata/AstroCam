@@ -1,13 +1,12 @@
 package com.jotarata.android.astrocam;
 
-import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Context;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.util.Log;
-import android.widget.Toast;
 
 public class SensorActivity implements SensorEventListener
 {
@@ -29,24 +28,49 @@ public class SensorActivity implements SensorEventListener
     public SensorActivity(Context context)
     {
         mContext = context;
+        Init();
         resume();
     }
-    public void resume() {
-        Log.d("sensor run", "");
+    public void Init()
+    {
         mSensorMgr = (SensorManager)mContext.getSystemService(Context.SENSOR_SERVICE);
-        Sensor acelerometer = mSensorMgr.getDefaultSensor(Sensor.TYPE_ACCELEROMETER, true);
+
+    }
+    public void resume() {
         if (mSensorMgr == null) {
             throw new UnsupportedOperationException("Sensors not supported");
         }
-        boolean supported = mSensorMgr.registerListener(this, acelerometer, SensorManager.SENSOR_DELAY_GAME);
+
+        Sensor mAccelerometer = mSensorMgr.getDefaultSensor(Sensor.TYPE_ACCELEROMETER, true);
+        boolean supported = mSensorMgr.registerListener(this, mAccelerometer, SensorManager.SENSOR_DELAY_GAME);
+
         if (!supported) {
-            mSensorMgr.unregisterListener(this, acelerometer);
-            throw new UnsupportedOperationException("Accelerometer not supported");
+            Log.d("SENSOR", "Linear acceerometer not found, fallback to accelerometer");
+            mSensorMgr.unregisterListener(this, mAccelerometer);
+
+            for (Sensor s : mSensorMgr.getSensorList(Sensor.TYPE_ALL))
+            {
+                if (s.getStringType().toUpperCase().contains("ACCELEROMETER"))
+                {
+                    mAccelerometer = s;
+                    break;
+                }
+            }
+
+             supported = mSensorMgr.registerListener(this, mAccelerometer, SensorManager.SENSOR_DELAY_GAME);
+
+            if (!supported) {
+                new AlertDialog.Builder(mContext)
+                        .setMessage("No se pudo iniciar el acelerometro en este dispositivo\nAsegurate entonces de dejar el telefono muy quieto")
+                        .setPositiveButton(android.R.string.ok, null)
+                        .show();
+            }
+            //throw new UnsupportedOperationException("Accelerometer not supported");
         }
     }
     public void pause() {
         if (mSensorMgr != null) {
-            mSensorMgr.unregisterListener(this, mSensorMgr.getDefaultSensor(Sensor.TYPE_ACCELEROMETER));
+            mSensorMgr.unregisterListener(this, mSensorMgr.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION));
             mSensorMgr = null;
         }
     }
