@@ -66,24 +66,23 @@ public class SettingsActivity extends AppCompatActivity {
 
         private void SetIsoValues() {
             Range<Integer> ISORanges = mCharacteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE);
-            int m100 = ISORanges.getLower()/100;
             int M100 = ISORanges.getUpper()/100;
 
-            int logm = (int) Math.ceil(Math.log(m100)/log2);
-            int logM = (int) Math.ceil(Math.log(M100)/log2);
+            int maxV = (int) Math.max(Math.ceil(Math.log(M100)/log2), 3);
 
-            Log.d("ISO Values Min", String.valueOf(m100));
-            Log.d("ISO Values Max", String.valueOf(M100));
-            String[] isoValues = new String[logM - logm + 1];
-            for (int i = 0; i <= logM - logm; i++)
+            Log.d("ISO Values Max", String.valueOf(maxV));
+            String[] isoValues = new String[maxV];
+
+            for (int i = 0; i < maxV; i++)
             {
-                isoValues[i] = String.valueOf((int)Math.pow(2, i + logm) * 100);
+                isoValues[i] = String.valueOf((int)Math.pow(2, i) * 100);
             }
+
             isoList.setEntryValues(isoValues);
 
             String[] isoLabels = isoValues.clone();
             isoLabels[0] += " (Mas oscuro)";
-            isoLabels[logM - logm] += " (Mas ruido)";
+            isoLabels[isoLabels.length - 1] += " (Mas ruido)";
             isoList.setEntries(isoLabels);
 
         }

@@ -573,7 +573,7 @@ public class Camera2RawFragment extends Fragment
         public void handleMessage(Message msg) {
             Activity activity = getActivity();
             if (activity != null) {
-                Toast.makeText(activity, (String) msg.obj, Toast.LENGTH_SHORT).show();
+                Toast.makeText(activity, (String) msg.obj, Toast.LENGTH_LONG).show();
             }
         }
     };
@@ -1909,7 +1909,7 @@ public class Camera2RawFragment extends Fragment
      *
      * @param text The message to show.
      */
-    private void showToast(String text) {
+    public void showToast(String text) {
         // We show a Toast by sending request message to mMessageHandler. This makes sure that the
         // Toast is shown on the UI thread.
         Message message = Message.obtain();

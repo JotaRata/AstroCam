@@ -1,5 +1,7 @@
 package com.jotarata.android.astrocam;
 
+
+import android.app.Activity;
 import android.content.SharedPreferences;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraMetadata;
@@ -7,6 +9,7 @@ import android.media.Image;
 import android.os.Build;
 import android.os.Environment;
 import android.util.Log;
+import android.widget.Toast;
 
 import java.io.File;
 import java.io.IOException;
@@ -86,7 +89,7 @@ public class FITSProcessor {
                 break;
 
         }
-        Log.d("Bayer Matrix mode:", String.valueOf(arrangement));
+        Log.wtf("Bayer Matrix mode:", String.valueOf(arrangement));
         long captureStartTime = System.currentTimeMillis();
 
         short halfHeight = (short) (imHeight / 2);
@@ -114,8 +117,8 @@ public class FITSProcessor {
         }
 
         frameList.set(frameCount, mCurrentFrame);
-        Log.d("RAW development Done in", String.valueOf(System.currentTimeMillis() - captureStartTime) + " ms");
-        Log.d("TAG", "ProcessImage: Done, remaining " + String.valueOf(frameCount));
+        Log.wtf("RAW development Done in", String.valueOf(System.currentTimeMillis() - captureStartTime) + " ms");
+        Log.wtf("TAG", "ProcessImage: Done, remaining " + String.valueOf(frameCount));
         captureStartTime = System.currentTimeMillis();
         //AddFrame(mCurrentFrame);
 
@@ -168,16 +171,16 @@ public class FITSProcessor {
                 }
 
                 // File is ready
-              //  Log.d("Image stacker", "File " + s + " is ready, preparing to delete..");
+                Log.wtf("Image stacker", "File " + fits.toString() + " is ready, preparing to delete..");
               //  File file = new File(s);
               //  file.delete();
 
 
         }
 
-        Log.d("Image stacker Ready, files stacked ", String.valueOf(frameList.size()));
+        Log.wtf("Image stacker Ready, files stacked ", String.valueOf(frameList.size()));
 
-        File mFile = new File(Environment.
+        final File mFile = new File(Environment.
                 getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
                 "FITS_" + generateTimestamp() + ".fits");
 
@@ -185,6 +188,11 @@ public class FITSProcessor {
 
         float expTime = frameList.size() * prefs.getInt("exposure", 0);
         try {
+            if (finalImage == null)
+            {
+                Log.wtf("Error", "No se pudo crear la imagen final, compruebe su configuracion");
+                return "";
+            }
             BasicHDU<?> hdu = FitsFactory.hduFactory(finalImage);
 
             // Setup header
@@ -206,8 +214,15 @@ public class FITSProcessor {
         } catch (FitsException | IOException e) {
             e.printStackTrace();
         }
-        //showToast("Guardando archivo final como " + mFile.getPath());
-        Log.d("Image stacker", "Final FITS saving with no issues");
+
+        final Activity activity = CameraActivity.mCamera2RawInstance.getActivity();
+        activity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                Toast.makeText(activity, "Guardando archivo final como " + mFile.getPath(), Toast.LENGTH_LONG).show();
+            }
+        });
+        Log.wtf("Image stacker", "Final FITS saving with no issues");
         synchronized (frameList)
         {
             frameList.clear();
@@ -219,7 +234,7 @@ public class FITSProcessor {
     }
 
     public static String generateTimestamp() {
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'<HH:mm:ss[.SS]", Locale.US); //yyyy_MM_dd_HH_mm
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US); //yyyy_MM_dd_HH_mm
         return sdf.format(new Date());
     }
 
