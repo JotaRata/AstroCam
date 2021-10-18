@@ -32,7 +32,6 @@ import android.graphics.Matrix;
 import android.graphics.Point;
 import android.graphics.RectF;
 import android.graphics.SurfaceTexture;
-import android.graphics.drawable.Drawable;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
@@ -47,12 +46,9 @@ import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
 import android.media.MediaPlayer;
-import android.media.MediaScannerConnection;
-import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.CountDownTimer;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
@@ -81,8 +77,6 @@ import com.jotarata.astrocam.R;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.ByteBuffer;
-import java.sql.Time;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -92,19 +86,11 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Random;
 import java.util.TreeMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import nom.tam.fits.Fits;
-import nom.tam.fits.FitsException;
-import nom.tam.fits.FitsFactory;
-import nom.tam.fits.ImageHDU;
-import nom.tam.fits.header.IFitsHeader;
-import nom.tam.util.BufferedFile;
 
 public class Camera2RawFragment extends Fragment
         implements View.OnClickListener, FragmentCompat.OnRequestPermissionsResultCallback {
@@ -581,6 +567,7 @@ public class Camera2RawFragment extends Fragment
 
     private static boolean captureEnabled;
     private static boolean timerActive;
+    private boolean alerts;
 
     private Button mPicture;
     private TextView mShakeWarn;
@@ -601,6 +588,9 @@ public class Camera2RawFragment extends Fragment
     private long captureStartTime;
     private CountDownLatch mCombineTimer;
     private Size largestRaw;
+    private AlertDialog savingDialog;
+
+    private FITSProcessor mProcessor;
 
     public void EnableCaptureSession(boolean enable)
     {
@@ -618,7 +608,7 @@ public class Camera2RawFragment extends Fragment
                     mTimer.cancel();
                     timerActive = false;
                     mTimerView.setVisibility(View.INVISIBLE);
-                    if (!camera_moved.isPlaying())
+                    if (!camera_moved.isPlaying() && alerts)
                     {
                         camera_moved.start();
                     }
@@ -638,7 +628,9 @@ public class Camera2RawFragment extends Fragment
                     mTimer.cancel();
                     timerActive = false;
                     mTimerView.setVisibility(View.INVISIBLE);
-                    camera_moved.start();
+                    if (alerts) {
+                        camera_moved.start();
+                    }
                     mTimer.start();
                 }
             }
@@ -660,7 +652,7 @@ public class Camera2RawFragment extends Fragment
 
         mPrefs = PreferenceManager.getDefaultSharedPreferences(getActivity());
 
-
+        alerts = mPrefs.getBoolean("sound", true);
         mPicture = (Button)view.findViewById(R.id.picture);
 
         view.findViewById(R.id.info).setOnClickListener(this);
@@ -669,7 +661,13 @@ public class Camera2RawFragment extends Fragment
 
         mShakeWarn = (TextView)view.findViewById(R.id.shake_warn);
         mTimerView = (TextView)view.findViewById(R.id.timer);
+        AlertDialog.Builder dialog = new AlertDialog.Builder(getContext())
+                    .setTitle("Procesando imagen")
+                    .setMessage("Se esta procesando la imagen final, no salga de la app")
+                    .setCancelable(false);
 
+        savingDialog = dialog.show();
+        savingDialog.dismiss();
 
         camera_start = MediaPlayer.create(getActivity(), R.raw.capture_start);
         camera_end = MediaPlayer.create(getActivity(), R.raw.capture_end);
@@ -696,6 +694,8 @@ public class Camera2RawFragment extends Fragment
                 //Log.d("Sensor","Calm");
             }
         });
+
+        mProcessor = new FITSProcessor();
     }
 
     @Override
@@ -783,12 +783,12 @@ public class Camera2RawFragment extends Fragment
 
     private void CancelCapture() {
 
-        Log.d(TAG, "CancelCapture: Waiting for completion..." + String.valueOf(FITSProcessor.frameCount));
+        Log.d(TAG, "CancelCapture: Waiting for completion..." + String.valueOf(mProcessor.frameCount));
         if(Looper.myLooper() != Looper.getMainLooper()) {
-            synchronized (FITSProcessor.frameCount) {
-                while (FITSProcessor.frameCount > 0) {
+            synchronized (mProcessor.frameCount) {
+                while (mProcessor.frameCount > 0) {
                     try {
-                        FITSProcessor.frameCount.wait();
+                        mProcessor.frameCount.wait();
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
@@ -804,10 +804,33 @@ public class Camera2RawFragment extends Fragment
         if (mPendingUserCaptures == 0)
         {
             Log.d("Capture done total time", String.valueOf((System.currentTimeMillis() - captureStartTime) / 1000f));
-            camera_sucess.start();
+
+            getActivity().runOnUiThread(new Runnable() {
+                @Override
+                public void run(){
+                    savingDialog.show();
+                }
+            });
+
+            Action<String> finish = new Action<String>() {
+                @Override
+                public void run(final String path) {
+                    getActivity().runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            Toast.makeText(getActivity(), "Guardando archivo final como " + path, Toast.LENGTH_LONG).show();
+                            savingDialog.dismiss();
+                        }
+                    });
+
+                }
+            };
+            if (alerts) {
+                camera_sucess.start();
+            }
             waitingForSave = false;
-            String filePath = FITSProcessor.CombineAllImages(mPrefs);
-            showToast("Guardando archivo final como " + filePath);
+            String filePath = mProcessor.CombineAllImages(mPrefs, finish);
+            //showToast("Guardando archivo final como " + filePath);
             return;
         }
         if (waitingForSave)
@@ -821,12 +844,12 @@ public class Camera2RawFragment extends Fragment
     private void InitializeTimerCountDown() {
 
         // mTimerQueue ++;
-        if (timerActive || !FITSProcessor.processReady)
+        if (timerActive || !mProcessor.processReady)
         {
             return;
         }
         mTimerQueue = mPrefs.getInt("numberF", 1);
-        FITSProcessor.InitFrameList(mTimerQueue, largestRaw.getWidth(), largestRaw.getHeight());
+        mProcessor.InitFrameList(mTimerQueue, largestRaw.getWidth(), largestRaw.getHeight());
 
         mTimer = new CountDownTimer(4000, 1000) {
             @Override
@@ -839,16 +862,18 @@ public class Camera2RawFragment extends Fragment
                 {
                     mTimerView.setVisibility(View.VISIBLE);
                 }
-                switch (seconds) {
-                    case 3:
-                        timer_tick1.start();
-                        break;
-                    case 2:
-                        timer_tick2.start();
-                        break;
-                    case 1:
-                        timer_tick3.start();
-                        break;
+                if (alerts) {
+                    switch (seconds) {
+                        case 3:
+                            timer_tick1.start();
+                            break;
+                        case 2:
+                            timer_tick2.start();
+                            break;
+                        case 1:
+                            timer_tick3.start();
+                            break;
+                    }
                 }
             }
 
@@ -1203,6 +1228,7 @@ public class Camera2RawFragment extends Fragment
             // We set up a CaptureRequest.Builder with the output Surface.
             mPreviewRequestBuilder
                     = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
+
             mPreviewRequestBuilder.addTarget(surface);
 
             // Here, we create a CameraCaptureSession for camera preview.
@@ -1217,7 +1243,7 @@ public class Camera2RawFragment extends Fragment
                                 }
 
                                 try {
-                                    setup3AControlsLocked(mPreviewRequestBuilder);
+                                    setup3AControlsLocked(mPreviewRequestBuilder, "PREVIEW");
                                     // Finally, we start displaying the camera preview.
                                     cameraCaptureSession.setRepeatingRequest(
                                             mPreviewRequestBuilder.build(),
@@ -1244,37 +1270,36 @@ public class Camera2RawFragment extends Fragment
     }
 
     /**
-     * Configure the given {@link CaptureRequest.Builder} to use auto-focus, auto-exposure, and
-     * auto-white-balance controls if available.
-     * <p/>
      * Call this only with {@link #mCameraStateLock} held.
      *
      * @param builder the builder to configure.
      */
-    private void setup3AControlsLocked(CaptureRequest.Builder builder) {
+    private void setup3AControlsLocked(CaptureRequest.Builder builder, String state) {
         // Enable auto-magical 3A run by camera device
         builder.set(CaptureRequest.CONTROL_MODE,
                 CaptureRequest.CONTROL_MODE_AUTO);
 
-        Float minFocusDist =
-                mCharacteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE);
-
         // If MINIMUM_FOCUS_DISTANCE is 0, lens is fixed-focus and we need to skip the AF run.
         mNoAFRun = true; //(minFocusDist == null || minFocusDist == 0);
 
-        Float maxFocusDist = 0.0f;
-            //    mCharacteristics.get(CameraCharacteristics.LENS_INFO_HYPERFOCAL_DISTANCE);
-
-        builder.set(CaptureRequest.LENS_FOCUS_DISTANCE, maxFocusDist);
+        builder.set(CaptureRequest.LENS_FOCUS_DISTANCE, 0.001f);
         builder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF);
 
-        Long maxExposureTime  =  mCharacteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE).getUpper();
         int maxISO = mCharacteristics.get((CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)).getUpper();
+
         Range<Integer> evRange = mCharacteristics.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE);
         Integer maxEV = evRange.getUpper();
 
-        builder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, (long) mPrefs.getFloat("frame_exp", 1));
-        builder.set(CaptureRequest.SENSOR_SENSITIVITY, Integer.valueOf(mPrefs.getString("iso", "1600")));
+        long exposure_time = (long) mPrefs.getFloat("frame_exp", 1);
+        int iso_value = Integer.parseInt(mPrefs.getString("iso", "1600"));
+
+        if (state == "PREVIEW")
+        {
+            exposure_time = Math.max(exposure_time, 1);
+            iso_value = maxISO;
+        }
+        builder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, exposure_time);
+        builder.set(CaptureRequest.SENSOR_SENSITIVITY, iso_value);
         builder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, maxEV);
         builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF);
 
@@ -1350,9 +1375,9 @@ public class Camera2RawFragment extends Fragment
      */
     private void captureStillPictureLocked() {
         try {
-
-            Log.d("Capture still picture remaining", String.valueOf(mPendingUserCaptures));
-            camera_start.start();
+            if (alerts) {
+                camera_start.start();
+            }
             final Activity activity = getActivity();
             if (null == activity || null == mCameraDevice) {
                 return;
@@ -1366,7 +1391,7 @@ public class Camera2RawFragment extends Fragment
             if (!waitingForSave)
             {
                 // Use the same AE and AF modes as the preview.
-                setup3AControlsLocked(captureBuilder);
+                setup3AControlsLocked(captureBuilder, "CAPTURE");
                 waitingForSave = true;
             }
 
@@ -1432,8 +1457,6 @@ public class Camera2RawFragment extends Fragment
             if (mPendingUserCaptures > 0 && waitingForSave) {
 
                 captureStillPictureLocked();
-                Log.d("Dequeue Done remaining", String.valueOf(mPendingUserCaptures));
-
             }else
             {
                 new Thread(new Runnable() {
@@ -1486,10 +1509,12 @@ public class Camera2RawFragment extends Fragment
                 return;
             }
 
-            builder.setRefCountedReader(reader).setImage(image);
+            builder.setRefCountedReader(reader).setImage(image).setFITProcessor(mProcessor);
 
             handleCompletionLocked(entry.getKey(), builder, pendingQueue);
-            camera_end.start();
+            if (alerts) {
+                camera_end.start();
+            }
             mState = STATE_PREVIEW;
         }
 
@@ -1510,6 +1535,8 @@ public class Camera2RawFragment extends Fragment
          * The image to save.
          */
         private final Image mImage;
+
+        private final Image.Plane mPlane;
         /**
          * The file we save the image into.
          */
@@ -1529,6 +1556,7 @@ public class Camera2RawFragment extends Fragment
          * The Context to use when updating MediaStore with the saved images.
          */
         private final Context mContext;
+        private final FITSProcessor mProcessor;
         private ImageSavedEvent mCallback;
 
         /**
@@ -1536,17 +1564,19 @@ public class Camera2RawFragment extends Fragment
          */
         private final RefCountedAutoCloseable<ImageReader> mReader;
 
-        private ImageSaver(Image image, File file, CaptureResult result,
+        private ImageSaver(Image image, Image.Plane plane, File file, CaptureResult result,
                            CameraCharacteristics characteristics, Context context,
                            RefCountedAutoCloseable<ImageReader> reader,
-                           ImageSavedEvent callbackEvent) {
+                           ImageSavedEvent callbackEvent, FITSProcessor processor) {
             mImage = image;
+            mPlane = plane;
             mFile = file;
             mCaptureResult = result;
             mCharacteristics = characteristics;
             mContext = context;
             mReader = reader;
             mCallback = callbackEvent;
+            mProcessor = processor;
         }
 
         @Override
@@ -1556,7 +1586,7 @@ public class Camera2RawFragment extends Fragment
                 return;
             }
             mCallback.run();
-            boolean success = FITSProcessor.ProcessImage(mImage);
+            boolean success = mProcessor.CaptureSingleFrame(mPlane);
 
             // Decrement reference count to allow ImageReader to be closed to free up resources.
             mReader.close();
@@ -1588,12 +1618,14 @@ public class Camera2RawFragment extends Fragment
          */
         public static class ImageSaverBuilder {
             private Image mImage;
+            private Image.Plane mPlane;
             private File mFile;
             private CaptureResult mCaptureResult;
             private CameraCharacteristics mCharacteristics;
             private Context mContext;
             private RefCountedAutoCloseable<ImageReader> mReader;
             private  ImageSavedEvent mCallback;
+            private FITSProcessor mProcessor;
 
             /**
              * Construct a new ImageSaverBuilder using the given {@link Context}.
@@ -1616,6 +1648,7 @@ public class Camera2RawFragment extends Fragment
             public synchronized ImageSaverBuilder setImage(final Image image) {
                 if (image == null) throw new NullPointerException();
                 mImage = image;
+                mPlane = image.getPlanes()[0];
                 return this;
             }
 
@@ -1625,6 +1658,11 @@ public class Camera2RawFragment extends Fragment
                 return this;
             }
 
+            public synchronized ImageSaverBuilder setFITProcessor(FITSProcessor processor)
+            {
+                mProcessor = processor;
+                return this;
+            }
             public synchronized ImageSaverBuilder setResult(final CaptureResult result) {
                 if (result == null) throw new NullPointerException();
                 mCaptureResult = result;
@@ -1646,8 +1684,8 @@ public class Camera2RawFragment extends Fragment
                 if (!isComplete()) {
                     return null;
                 }
-                return new ImageSaver(mImage, mFile, mCaptureResult, mCharacteristics, mContext,
-                        mReader, mCallback);
+                return new ImageSaver(mImage, mPlane,  mFile, mCaptureResult, mCharacteristics, mContext,
+                        mReader, mCallback, mProcessor);
             }
 
             public synchronized String getSaveLocation() {

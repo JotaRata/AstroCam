@@ -9,7 +9,6 @@ import android.media.Image;
 import android.os.Build;
 import android.os.Environment;
 import android.util.Log;
-import android.widget.Toast;
 
 import java.io.File;
 import java.io.IOException;
@@ -19,6 +18,8 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.Locale;
 import java.util.Random;
+import java.util.TimeZone;
+import java.util.concurrent.locks.ReentrantLock;
 
 import nom.tam.fits.BasicHDU;
 import nom.tam.fits.Fits;
@@ -29,13 +30,23 @@ import nom.tam.util.BufferedFile;
 
 public class FITSProcessor {
 
+    public static FITSProcessor singleton;
+    public  boolean processReady = true;
 
-    public static  boolean processReady = true;
-    private static volatile ArrayList<RAWImage> frameList;
-    public static volatile  Integer frameCount;
-    private static int imWidth, imHeight;
+    private final ReentrantLock lock = new ReentrantLock();
+    private ArrayList<RAWImage> frameList;
+    public  Integer frameCount;
+    private int imWidth, imHeight;
 
-    public static void InitFrameList(int capacity, int width, int height)
+    // Bayer matrix arrangement
+    private int arrangement;
+    byte offset_1, offset_2;
+
+    public FITSProcessor(){
+        singleton = this;
+    }
+
+    public void InitFrameList(int capacity, int width, int height)
     {
         frameList = new ArrayList<>(capacity);
         frameCount = capacity - 1;
@@ -44,35 +55,15 @@ public class FITSProcessor {
         imHeight = height;
         imWidth = width;
 
-        for (int i = 0; i < capacity; i++) {
-                AddFrame(new RAWImage(imWidth/2,imHeight/2));
+        try {
+            arrangement = CameraActivity.mCamera2RawInstance.mCharacteristics.get(CameraCharacteristics.SENSOR_INFO_COLOR_FILTER_ARRANGEMENT);
+        }catch (NullPointerException e){
+            Log.e("Critical Error", "No se pudo extraer la informacion del sensor");
+            e.printStackTrace();
+            return;
         }
-    }
 
-    public static void AddFrame(RAWImage frame)
-    {
-        frameList.add(frame);
-    }
-    public static boolean ProcessImage(Image mImage)
-    {
-        boolean success = false;
 
-        Image.Plane plane = mImage.getPlanes()[0];
-        ByteBuffer buffer = plane.getBuffer();
-        byte[] bytes = new byte[buffer.remaining()];
-        buffer.get(bytes);
-        buffer.rewind();
-
-        int pStride = plane.getPixelStride();
-        int rStride = plane.getRowStride();
-
-        //int imWidth = mImage.getWidth();
-        //int imHeight = mImage.getHeight();
-
-        // Bayer matrix arrangement
-        int arrangement = CameraActivity.mCamera2RawInstance.mCharacteristics.get(CameraCharacteristics.SENSOR_INFO_COLOR_FILTER_ARRANGEMENT);
-        byte offset_1 = 0;    // Offset to gte green pixels
-        byte offset_2 = 0;
         switch (arrangement)
         {
             case CameraMetadata.SENSOR_INFO_COLOR_FILTER_ARRANGEMENT_RGGB:
@@ -89,7 +80,32 @@ public class FITSProcessor {
                 break;
 
         }
-        Log.wtf("Bayer Matrix mode:", String.valueOf(arrangement));
+        Log.d("Bayer Matrix mode:", String.valueOf(arrangement));
+
+        for (int i = 0; i < capacity; i++) {
+                AddFrame(new RAWImage(imWidth/2,imHeight/2));
+        }
+    }
+
+    public void AddFrame(RAWImage frame)
+    {
+        frameList.add(frame);
+    }
+
+    public boolean CaptureSingleFrame(Image.Plane plane)
+    {
+        ByteBuffer buffer = plane.getBuffer();
+        byte[] bytes = new byte[buffer.remaining()];
+        buffer.get(bytes);
+        buffer.rewind();
+
+        int pStride = plane.getPixelStride();
+        int rStride = plane.getRowStride();
+
+        //int imWidth = mImage.getWidth();
+        //int imHeight = mImage.getHeight();
+
+
         long captureStartTime = System.currentTimeMillis();
 
         short halfHeight = (short) (imHeight / 2);
@@ -117,30 +133,36 @@ public class FITSProcessor {
         }
 
         frameList.set(frameCount, mCurrentFrame);
-        Log.wtf("RAW development Done in", String.valueOf(System.currentTimeMillis() - captureStartTime) + " ms");
-        Log.wtf("TAG", "ProcessImage: Done, remaining " + String.valueOf(frameCount));
+        Log.d("RAW development Done in", String.valueOf(System.currentTimeMillis() - captureStartTime) + " ms");
+        Log.d("TAG", "ProcessImage: Done, remaining " + String.valueOf(frameCount));
         captureStartTime = System.currentTimeMillis();
         //AddFrame(mCurrentFrame);
 
-        frameCount --;
-        synchronized (frameCount)
-        {
-            frameCount.notify();
+        lock.lock();
+        try {
+            frameCount--;
+            synchronized (frameCount)
+            {
+                frameCount.notify();
+            }
+
+        }finally {
+            lock.unlock();
         }
 
-        return  success;
+        return true;
     }
 
 
-    public static String CombineAllImages(SharedPreferences prefs)
+    public String CombineAllImages(SharedPreferences prefs, Action<String> OnFinish)
     {
         if (frameList == null)
         {
             return null;
         }
         short [][] finalImage = null;
-        int[] randomMove = new int[]{-1, 0, 1};
-        Random rand = new Random();
+        final int[] randomMove = new int[]{-1, 0, 1};
+        final Random rand = new Random();
         for (RAWImage fits : frameList) {
                 //Fits fits = new Fits(s);
 
@@ -171,22 +193,22 @@ public class FITSProcessor {
                 }
 
                 // File is ready
-                Log.wtf("Image stacker", "File " + fits.toString() + " is ready, preparing to delete..");
+                Log.d("Image stacker", "File " + fits.toString() + " is ready, preparing to delete..");
               //  File file = new File(s);
               //  file.delete();
 
 
         }
 
-        Log.wtf("Image stacker Ready, files stacked ", String.valueOf(frameList.size()));
+        Log.d("Image stacker Ready, files stacked ", String.valueOf(frameList.size()));
 
         final File mFile = new File(Environment.
                 getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
-                "FITS_" + generateTimestamp() + ".fits");
+                "FITS_" + generateTimestamp("_", false) + ".fits");
 
         Fits fits = new Fits();
 
-        float expTime = frameList.size() * prefs.getInt("exposure", 0);
+        float expTime = (float) (frameList.size() * prefs.getFloat("frame_exp", 0) * 10E-9);
         try {
             if (finalImage == null)
             {
@@ -198,7 +220,8 @@ public class FITSProcessor {
             // Setup header
             hdu.addValue("OBJECT", "LIGHTS", "");
             hdu.addValue("PROGRAM", "ASTROCAM", "");
-            hdu.addValue("DATE-OBS", generateTimestamp(), "Current time of the observation");
+            hdu.addValue("DATE-OBS", generateTimestamp(":", true), "Date of the observation in UTC");
+            hdu.addValue("TIMEZONE", TimeZone.getDefault().toString(), "Time zone at the location of the observation");
             hdu.addValue("EXPTIME", expTime, "Total integration time in seconds");
             hdu.addValue("INSTRUME", Build.MANUFACTURER.toUpperCase() + Build.MODEL.toUpperCase(), "Device name");
             hdu.addValue("STACK", frameList.size(), "Number of stacked images");
@@ -215,26 +238,29 @@ public class FITSProcessor {
             e.printStackTrace();
         }
 
-        final Activity activity = CameraActivity.mCamera2RawInstance.getActivity();
-        activity.runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                Toast.makeText(activity, "Guardando archivo final como " + mFile.getPath(), Toast.LENGTH_LONG).show();
-            }
-        });
-        Log.wtf("Image stacker", "Final FITS saving with no issues");
-        synchronized (frameList)
+        Log.d("Image stacker", "Final FITS saving with no issues");
+
+        lock.lock();
+        try
         {
             frameList.clear();
             frameCount = 0;
             processReady = true;
             frameList = null;
+        }finally {
+            lock.unlock();
         }
+        OnFinish.run(mFile.getPath());
         return mFile.getPath();
     }
 
-    public static String generateTimestamp() {
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US); //yyyy_MM_dd_HH_mm
+    public static String generateTimestamp(String timeSep, boolean utc) {
+        SimpleDateFormat sdf = new SimpleDateFormat(String.format("yyyy-MM-dd'T'HH{0}mm{0}ss", timeSep), Locale.US); //yyyy_MM_dd_HH_mm
+
+        if (utc)
+        {
+            sdf.setTimeZone(TimeZone.getTimeZone("GMT"));
+        }
         return sdf.format(new Date());
     }
 
