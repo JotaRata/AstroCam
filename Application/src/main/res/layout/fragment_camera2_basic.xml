@@ -14,6 +14,7 @@
  limitations under the License.
 -->
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -42,14 +43,15 @@
 
         <Button
             android:id="@+id/prefs"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:layout_gravity="center|start"
             android:background="@android:color/transparent"
             android:foreground="@drawable/ic_baseline_settings_24"
             android:foregroundTint="#D1D1D1"
             android:rotationX="1"
             android:translationX="16dp"
+            tools:ignore="SpeakableTextPresentCheck"
             tools:visibility="visible" />
 
         <Button
@@ -62,6 +64,7 @@
             android:foregroundTint="#FF1515"
             android:rotationX="0"
             android:translationX="0dp"
+            tools:ignore="SpeakableTextPresentCheck"
             tools:visibility="visible" />
 
     </FrameLayout>
@@ -83,7 +86,6 @@
         android:layout_height="230dp"
 
         android:layout_marginTop="200dp"
-        android:drawableTop="@drawable/ic_baseline_warning_24"
         android:gravity="center"
         android:text="El telefono se esta moviendo, asegurate de tenerlo sobre una superficie estable o un tripode antes de comenzar"
         android:textAlignment="center"
@@ -91,7 +93,8 @@
         android:textColor="#FF5858"
         android:textSize="24sp"
         android:visibility="invisible"
-        tools:visibility="invisible" />
+        tools:visibility="invisible"
+        app:drawableTopCompat="@drawable/ic_baseline_warning_24" />
 
     <TextView
         android:id="@+id/timer"

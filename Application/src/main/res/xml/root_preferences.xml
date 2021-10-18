@@ -19,12 +19,14 @@
             app:title="Sensibilidad del sensor"
             app:useSimpleSummaryProvider="true" />
 
+
+    </PreferenceCategory>
+    <PreferenceCategory android:title="Alertas">
+
         <SwitchPreferenceCompat
+            app:defaultValue="true"
             app:key="sound"
-            app:title="Activar respuesta sonora"
-            app:defaultValue="true"/>
-
-
+            app:title="Activar alerta sonora" />
     </PreferenceCategory>
 
 </PreferenceScreen>

@@ -110,7 +110,7 @@ public class SettingsActivity extends AppCompatActivity {
             Log.d("Effective Focal Length", String.valueOf(eFocalLEngth));
 
 
-            expSlider.setMax(Math.max(maxExposure, 4));
+            expSlider.setMax(30);
             expSlider.setMin(1);
 
             UpdateExpInfo(expSlider.getValue(), maxExposure);
@@ -128,7 +128,8 @@ public class SettingsActivity extends AppCompatActivity {
         {
             Range<Long> exprange = mCharacteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE);
 
-            float  maxExp = (float) (exprange.getUpper() / 1_000_000_000.0);
+            assert exprange != null;
+            float  maxExp = (float) Math.min(exprange.getUpper() / 1_000_000_000.0, 10);
 
             float maxExpPerFrame = Math.min(userExp, maxExp);
             int numberOfFrames = (int) Math.max(userExp / (maxExpPerFrame), 1);
@@ -138,7 +139,7 @@ public class SettingsActivity extends AppCompatActivity {
             mEditor.putFloat("frame_exp", maxExpPerFrame * 1_000_000_000);
             mEditor.commit();
 
-            int estimadedWait = (int)(numberOfFrames * (maxExpPerFrame + 1.8f));
+            int estimadedWait = (int)(numberOfFrames * (maxExpPerFrame + 1.5f));
 
             String text = String.format("Se tomaran %o imagenes con un tiempo de exposicion de %.2f segundos cada una.\n\n", numberOfFrames, maxExpPerFrame);
             text += String.format("La sesion durara aproximadamente %o segundos\n\n", estimadedWait);
