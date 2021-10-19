@@ -583,7 +583,7 @@ public class Camera2RawFragment extends Fragment
     private  MediaPlayer timer_tick1, timer_tick2, timer_tick3;
 
     private SensorActivity mSensorActivity;
-    private static boolean waitingForSave;
+    private static volatile boolean waitingForSave;
     private SharedPreferences  mPrefs;
     private long captureStartTime;
     private CountDownLatch mCombineTimer;
@@ -757,7 +757,7 @@ public class Camera2RawFragment extends Fragment
                         timerActive = false;
                         mTimerQueue = 0;
 
-                        CancelCapture();
+                        FinishCapture();
                     }
 
                 break;
@@ -781,9 +781,8 @@ public class Camera2RawFragment extends Fragment
         }
     }
 
-    private void CancelCapture() {
+    private void FinishCapture() {
 
-        Log.d(TAG, "CancelCapture: Waiting for completion..." + String.valueOf(mProcessor.frameCount));
         if(Looper.myLooper() != Looper.getMainLooper()) {
             synchronized (mProcessor.frameCount) {
                 while (mProcessor.frameCount > 0) {
@@ -891,7 +890,7 @@ public class Camera2RawFragment extends Fragment
                 timerActive = false;
                 if (mTimerQueue == 0)
                 {
-                   CancelCapture();
+                   FinishCapture();
 
                 }
             }
@@ -1327,12 +1326,6 @@ public class Camera2RawFragment extends Fragment
         synchronized (mCameraStateLock) {
              mPendingUserCaptures++;
 
-            // If we already triggered a pre-capture sequence, or are in a state where we cannot
-            // do this, return immediately.
-            if (mState != STATE_PREVIEW) {
-                Log.w("State is not on preview", String.valueOf(mState));
-                return;
-            }
             Log.d("State", "Taking Picture..");
             try {
                 //camera_start.start();
@@ -1459,12 +1452,7 @@ public class Camera2RawFragment extends Fragment
                 captureStillPictureLocked();
             }else
             {
-                new Thread(new Runnable() {
-                    @Override
-                    public void run() {
-                        CancelCapture();
-                    }
-                }).start();
+                FinishCapture();
             }
         }
     };
@@ -1591,24 +1579,6 @@ public class Camera2RawFragment extends Fragment
             // Decrement reference count to allow ImageReader to be closed to free up resources.
             mReader.close();
             mImage.close();
-
-            // If saving the file succeeded, update MediaStore.
-            /*if (success) {
-              //  mCallback.run();
-                MediaScannerConnection.scanFile(mContext, new String[]{mFile.getPath()},
-                *//*mimeTypes*//*null, new MediaScannerConnection.MediaScannerConnectionClient() {
-                    @Override
-                    public void onMediaScannerConnected() {
-                        // Do nothing
-                    }
-
-                    @Override
-                    public void onScanCompleted(String path, Uri uri) {
-                        Log.i(TAG, "Scanned " + path + ":");
-                        Log.i(TAG, "-> uri=" + uri);
-                    }
-                });
-            }*/
         }
 
         /**
