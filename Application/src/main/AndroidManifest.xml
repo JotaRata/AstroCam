@@ -7,21 +7,16 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" /> <!-- A camera with RAW capability is required to use this application -->
-    <uses-feature android:name="android.hardware.camera" />
+    <uses-feature android:name="android.hardware.camera2.full" />
     <uses-feature android:name="android.hardware.camera.raw" />
     <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="true" />
 
     <application
-        android:allowBackup="true"
         android:icon="@drawable/ic_launcher"
         android:label="@string/app_name"
-        android:theme="@style/Theme.AppCompat.DayNight">
+        android:theme="@style/AppTheme">
         <activity
-            android:name="com.jotarata.android.astrocam.SettingsActivity"
-            android:parentActivityName="com.jotarata.android.astrocam.CameraActivity"
-            android:label="@string/title_activity_settings" />
-        <activity
-            android:name="com.jotarata.android.astrocam.CameraActivity"
+            android:name="Astrocam_Activity"
             android:label="@string/app_name">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

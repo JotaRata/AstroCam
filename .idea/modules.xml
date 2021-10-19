@@ -2,7 +2,8 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/AstroCam.iml" filepath="$PROJECT_DIR$/.idea/AstroCam.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/AstroCam.iml" filepath="$PROJECT_DIR$/.idea/modules/AstroCam.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/Application/AstroCam.Application.iml" filepath="$PROJECT_DIR$/.idea/modules/Application/AstroCam.Application.iml" />
     </modules>
   </component>
 </project>
