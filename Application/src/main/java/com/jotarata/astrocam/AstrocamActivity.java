@@ -16,22 +16,25 @@
 
 package com.jotarata.astrocam;
 
-import android.app.Activity;
 import android.os.Bundle;
 
-import com.jotarata.astrocam.R;
+import androidx.appcompat.app.AppCompatActivity;
 
 /**
  * Activity displaying a fragment that implements RAW photo captures.
  */
-public class Astrocam_Activity extends Activity {
+public class AstrocamActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.astrocam_activity);
-        if (null == savedInstanceState) {
 
+        setContentView(R.layout.fragment_camera);
+        if (null == savedInstanceState) {
+            CameraFragment cameraFragment = CameraFragment.newInstance();
+            getSupportFragmentManager().beginTransaction()
+                    .add(R.id.camera_fragment_view, cameraFragment, null)
+                    .commit();
         }
 
     }

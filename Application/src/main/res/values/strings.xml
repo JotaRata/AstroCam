@@ -1,20 +1,7 @@
-<?xml version="1.0" encoding="utf-8"?><!--
- Copyright 2015 The Android Open Source Project
+<?xml version="1.0" encoding="utf-8"?>
 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
--->
 <resources>
-    <string name="picture">Picture</string>
+    <string name="picture">Capturar Imagen</string>
     <string name="description_info">Info</string>
     <string name="request_permission">Esta aplicacion requiere el permiso de camara.</string>
     <string name="title_activity_settings">Configuracion</string>
@@ -35,4 +22,7 @@
     <string name="attachment_summary_off">Only download attachments when manually requested</string>
     <!-- TODO: Remove or change this placeholder text -->
     <string name="hello_blank_fragment">Hello blank fragment</string>
+    <string name="viewCreationError">No se pudo iniciar la aplicacion</string>
+    <string name="Accept">Aceptar</string>
+    <string name="cameraPermission">La aplicacion necesita el permiso de camara para continuar</string>
 </resources>
